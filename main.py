@@ -11,6 +11,17 @@ import schedule
 import logging
 
 
+
+
+# Constants
+ACCOUNTS_FILE = 'accounts.csv'
+TRANSACTIONS_FILE = 'transactions.csv'
+LOANS_FILE = 'loans.csv'
+AUDIT_LOG_FILE = 'audit.log'
+BACKUP_DIR = 'backups'
+ADMIN_CREDENTIALS_FILE = 'admins.json'
+BACKUP_INTERVAL_MINUTES = 60 
+
 print('-'*50)
 
 print('*'*50)
