@@ -43,12 +43,31 @@ def rand():
     return num
 
 
-def add_account(balance):
+def clear_screen():
+    os.system('cls' if os.name == 'nt' else 'clear')
 
-  account_num = str(rand())
-  print(f'Your Account Number is: {account_num}')
-  accounts[account_num] = (balance, [])
-  print('Operation Done Successfully.\n')
+
+def hash_password(password: str) -> str:
+    # SHA256 hash password
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    
+    return hash_password(password) == hashed
+
+
+def generate_account_number() -> str:
+    return str(random.randint(100000, 999999))
+
+
+def log_audit(action: str, account: str | None = None, details: str = ""):
+    msg = f"ACTION={action}"
+    if account:
+        msg += f" ACCOUNT={account}"
+    if details:
+        msg += f" DETAILS={details}"
+    logging.info(msg)
 
 
 def check_balance(account_num):
@@ -177,7 +196,7 @@ def main():
         
         if choice == '1':
           balance = float(input("Enter initial balance: "))
-          add_account(balance)
+          generate_account_number()
 
         elif choice == '2':
           account_num = input("Enter account number: ")
