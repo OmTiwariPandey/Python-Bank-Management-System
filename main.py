@@ -10,9 +10,6 @@ import time
 import schedule
 import logging
 
-
-
-
 # Constants
 ACCOUNTS_FILE = 'accounts.csv'
 TRANSACTIONS_FILE = 'transactions.csv'
@@ -22,27 +19,15 @@ BACKUP_DIR = 'backups'
 ADMIN_CREDENTIALS_FILE = 'admins.json'
 BACKUP_INTERVAL_MINUTES = 60 
 
-print('-'*50)
+# Logging
+logging.basicConfig(
+    filename=AUDIT_LOG_FILE,
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
-print('*'*50)
-
-print('\tBank Management Software -by Om')
-
-print('Hello Bahini')
-
-print('*'*50)
-
-print('-'*50)
-
-accounts = {}
-
-
-def rand():
-
-    num = random.randint(100000, 999999)
-    return num
-
-
+# Utility
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
@@ -70,108 +55,121 @@ def log_audit(action: str, account: str | None = None, details: str = ""):
     logging.info(msg)
 
 
-def check_balance(account_num):
 
-  if account_num not in accounts:
-    print("Error: Account does not exist")
+class Transaction:
+    def __init__(self, account: str, tx_type: str, amount: float, balance: float, timestamp: datetime.datetime | None = None):
+        self.account = account
+        self.type = tx_type  # 'DEPOSIT', 'WITHDRAW', 'TRANSFER', etc.
+        self.amount = amount
+        self.balance = balance
+        self.timestamp = timestamp or datetime.datetime.now()
 
-  else:
-    balance = accounts[account_num][0]
-    print(f"Balance: {balance}")
-
-  print('Operation Done Successfully.\n')
-
-
-def deposit(account_num, amount):
-
-  if account_num not in accounts:
-    print("Error: Account does not exist")
-
-  else:
-    balance = accounts[account_num][0]
-    transaction_history = accounts[account_num][1]
-    accounts[account_num] = (balance + amount, transaction_history)
-    transaction_history.append(f"Deposited Rs{amount}")
-    balance = accounts[account_num][0]
-    print(f'Current Balance: {balance}')
-
-  print('Operation Done Successfully.\n')
-
-def withdraw(account_num, amount):
-
-  if account_num not in accounts:
-    print("Error: Account does not exist")
-
-  else:
-    balance = accounts[account_num][0]
-    transaction_history = accounts[account_num][1]
-
-    if balance < amount:
-      print("Error: Insufficient balance")
-      balance = accounts[account_num][0]
-      print(f'Current Balance: {balance}')
-
-    else:
-      accounts[account_num] = (balance - amount, transaction_history)
-      transaction_history.append(f"Withdrew Rs{amount}")
-      balance = accounts[account_num][0]
-      print(f'Current Balance: {balance}')
-
-  print('Operation Done Successfully.\n')
-
-def display_all():
-  bal=0
-
-  print('Account| Balance')
-  for account_num, (balance, _) in accounts.items():
-    bal=bal+balance
-    print(f"{account_num} | {balance}")
-  print(f'Total Amount in Bank= {bal}')
-  print('Operation Done Successfully.\n')
-  
+    def to_dict(self) -> dict:
+        return {
+            'account': self.account,
+            'datetime': self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            'type': self.type,
+            'amount': f"{self.amount:.2f}",
+            'balance': f"{self.balance:.2f}"
+        }
 
 
-def print_bank_statement(account_num):
+class Account:
+    # Represents a single bank account
+    def __init__(
+        self,
+        number: str,
+        name: str,
+        email: str,
+        phone: str,
+        password_hash: str,
+        balance: float = 0.0,
+        is_frozen: bool = False
+    ):
+        self.number = number
+        self.name = name
+        self.email = email
+        self.phone = phone
+        self.password_hash = password_hash
+        self.balance = balance
+        self.is_frozen = is_frozen
+        self.transactions: list[Transaction] = []
 
-  if account_num not in accounts:
-    print("Error: Account does not exist")
-    
-  else:
-      
-    balance = accounts[account_num][0]
-    transaction_history = accounts[account_num][1]
-    print(f"Bank statement for account {account_num}:")
-    print(f"Balance: {balance}")
-    print("Transaction history:")
-    
-    print('-'*60)
-    
-    
-    balance = accounts[account_num][0]
-    print(f'Current Balance: {balance}')
+    def deposit(self, amount: float) -> None:
+        if self.is_frozen:
+            raise PermissionError("Account is frozen.")
+        if amount <= 0:
+            raise ValueError("Deposit amount must be positive.")
+        self.balance += amount
+        tx = Transaction(self.number, 'DEPOSIT', amount, self.balance)
+        self.transactions.append(tx)
+        Bank.append_transaction(tx)
+        log_audit('DEPOSIT', self.number, f"Amount={amount}")
 
-    for transaction in transaction_history:
-      print(transaction)
-  print('Operation Done Successfully.\n')
+    def withdraw(self, amount: float) -> None:
+        if self.is_frozen:
+            raise PermissionError("Account is frozen.")
+        if amount <= 0:
+            raise ValueError("Withdrawal amount must be positive.")
+        if amount > self.balance:
+            raise ValueError("Insufficient balance.")
+        self.balance -= amount
+        tx = Transaction(self.number, 'WITHDRAW', amount, self.balance)
+        self.transactions.append(tx)
+        Bank.append_transaction(tx)
+        log_audit('WITHDRAW', self.number, f"Amount={amount}")
 
+    def transfer_to(self, target: 'Account', amount: float) -> None:
+        if self.is_frozen or target.is_frozen:
+            raise PermissionError("One of the accounts is frozen.")
+        if amount <= 0:
+            raise ValueError("Transfer amount must be positive.")
+        if amount > self.balance:
+            raise ValueError("Insufficient balance.")
+        self.balance -= amount
+        target.balance += amount
+        tx_out = Transaction(self.number, 'TRANSFER_OUT', amount, self.balance)
+        tx_in = Transaction(target.number, 'TRANSFER_IN', amount, target.balance)
+        self.transactions.append(tx_out)
+        target.transactions.append(tx_in)
+        Bank.append_transaction(tx_out)
+        Bank.append_transaction(tx_in)
+        log_audit('TRANSFER', self.number, f"To={target.number},Amount={amount}")
 
-def load_data():
+    def add_transaction(self, tx: Transaction) -> None:
+        self.transactions.append(tx)
 
-  global accounts
-  with open('bank_data1.csv', 'r') as file:
-    reader = csv.reader(file)
-    accounts = {row[0]: (float(row[1]), row[2:]) for row in reader}
-  print('\nLoading Data...')
-  print('Operation Done Successfully.\n')
-    
-  
-def save_data():
-   with open('bank_data1.csv', 'w', newline='') as file:
-       writer = csv.writer(file)
-       for account_num, (balance, transaction_history) in accounts.items():
-           transaction_history_str = ','.join(transaction_history)
-           writer.writerow([account_num, balance, transaction_history_str])
-   print('Data Saved Successfully.\n')
+    def load_transactions(self) -> None:
+        self.transactions = []
+        if os.path.exists(TRANSACTIONS_FILE):
+            with open(TRANSACTIONS_FILE, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row['account'] == self.number:
+                        ts = datetime.datetime.strptime(row['datetime'], '%Y-%m-%d %H:%M:%S')
+                        tx = Transaction(
+                            account=row['account'],
+                            tx_type=row['type'],
+                            amount=float(row['amount']),
+                            balance=float(row['balance']),
+                            timestamp=ts
+                        )
+                        self.transactions.append(tx)
+
+    def statement_str(self) -> str:
+        self.load_transactions()
+        lines = []
+        header = f"Bank Statement for {self.name} (A/C {self.number})"
+        lines.append(header)
+        lines.append('-' * len(header))
+        lines.append(f"{'Date Time':<20} | {'Type':<12} | {'Amount':<10} | {'Balance':<10}")
+        lines.append('-' * 62)
+        for tx in sorted(self.transactions, key=lambda t: t.timestamp):
+            dt = tx.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+            lines.append(f"{dt:<20} | {tx.type:<12} | {tx.amount:<10.2f} | {tx.balance:<10.2f}")
+        lines.append('-' * 62)
+        lines.append(f"Current Balance: {self.balance:.2f}")
+        return '\n'.join(lines)
 
 
 def main():
