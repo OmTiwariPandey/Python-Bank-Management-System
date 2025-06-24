@@ -1,6 +1,6 @@
 # Bank Management System by Om
 
-A menu-driven Python application for managing bank accounts, transactions, loans, and administrative tasks. It supports user authentication, audit logging, automated backups, and more.
+This is a reupload of a menu-driven Python application for managing bank accounts created by Om, transactions, loans, and administrative tasks. It supports user authentication, audit logging, automated backups, and more.
 
 ---
 
